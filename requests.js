@@ -2,7 +2,7 @@ const chalk = require('chalk');
 const axios = require('axios');
 const crypto = require('crypto');
 const { url, getHeaders } = require('./config');
-const { attackQuery, refillQuery, turboQuery } = require('./queries');
+const { attackQuery, refillQuery, turboQuery, nextBossQuery } = require('./queries');
 
 
 function setToken(token) {  
@@ -29,6 +29,8 @@ async function attack(token, taps) {
         const { data } = res.data;
         data ? logAttack(taps, data) : false;
         const result = data?.telegramGameProcessTapsBatch;
+        const bossHealth = result?.currentBoss?.currentHealth;
+        (data && (bossHealth <= 0)) ? activateNextBoss(token) : false;
         const _refill = result?.freeBoosts?.currentRefillEnergyAmount || 0;
         if(result.currentEnergy <= taps){
             (_refill > 0) ? refill(token) : exitProcess();
@@ -51,11 +53,21 @@ async function refill(token) {
     });
 }
 
-function activateTurbo(token) {
+async function activateTurbo(token) {
     const _headers = getHeaders({ 'Authorization': setToken(token) });
-    return axios.post(url, turboQuery, { headers: _headers }).then((res) => {
+    return await axios.post(url, turboQuery, { headers: _headers }).then((res) => {
         const { data } = res.data;
         data ? logTurbo(data) : false;
+    }).catch((error) => {
+        logError(error);
+    });
+}
+
+async function activateNextBoss(token) {
+    const _headers = getHeaders({ 'Authorization': setToken(token) });
+    return await axios.post(url, nextBossQuery, { headers: _headers }).then((res) => {
+        const { data } = res.data;
+        data ? logNextBoss(data) : false;
     }).catch((error) => {
         logError(error);
     });
@@ -100,6 +112,16 @@ function logTurbo(data) {
         '| Coins:', chalk.yellow(data?.telegramGameActivateBooster?.coinsAmount),
         '| Energy:', `${chalk.magenta(data?.telegramGameActivateBooster?.currentEnergy)} / ${chalk.green(data?.telegramGameActivateBooster?.maxEnergy)}`,
         '| Boss Health:', `${chalk.magenta(data?.telegramGameActivateBooster?.currentBoss?.currentHealth)} / ${chalk.green(data?.telegramGameActivateBooster?.currentBoss?.maxHealth)}`
+    );
+}
+
+function logNextBoss(data) {
+    console.log(
+        'Next Boss Activated ...', chalk.blue('->'), chalk.green('\u2714'),
+        '| Coins:', chalk.yellow(data?.telegramGameSetNextBoss?.coinsAmount),
+        '| Energy:', `${chalk.magenta(data?.telegramGameSetNextBoss?.currentEnergy)} / ${chalk.green(data?.telegramGameSetNextBoss?.maxEnergy)}`,
+        '| Boss Level:', chalk.blue(data?.telegramGameSetNextBoss?.currentBoss?.level),
+        '| Boss Health:', `${chalk.magenta(data?.telegramGameSetNextBoss?.currentBoss?.currentHealth)} / ${chalk.green(data?.telegramGameSetNextBoss?.currentBoss?.maxHealth)}`
     );
 }
 
